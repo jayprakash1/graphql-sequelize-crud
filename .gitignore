@@ -29,7 +29,7 @@ build/Release
 # Dependency directories
 node_modules
 jspm_packages
-lib
+# lib //preinstall not working for docker so trying to add build folder
 
 # Optional npm cache directory
 .npm

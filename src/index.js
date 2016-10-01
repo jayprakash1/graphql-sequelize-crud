@@ -9,30 +9,42 @@ const {
   GraphQLNonNull,
   GraphQLBoolean,
   GraphQLInputObjectType,
-  GraphQLID
+  GraphQLID,
+  GraphQLEnumType,
 } = require('graphql');
 const _ = require('lodash');
 const pluralize = require('pluralize');
 const camelcase = require('camelcase');
+const Sequelize = require('sequelize');
 
 const {
   fromGlobalId,
   globalIdField,
   mutationWithClientMutationId
-} = require("graphql-relay");
+} = require('graphql-relay');
 
 const {
   defaultArgs,
   defaultListArgs,
   attributeFields,
+  typeMapper,
   resolver,
   relay: {
     sequelizeNodeInterface,
     sequelizeConnection
   }
-} = require("graphql-sequelize");
+} = require('graphql-sequelize');
 
-const jsonType = require("graphql-sequelize/lib/types/jsonType.js");
+const jsonType = require('graphql-sequelize/lib/types/jsonType.js');
+
+typeMapper.mapType((type) => {
+   //map bools as strings
+   if (type instanceof Sequelize.JSON) {
+     return jsonType.default; 
+   }
+   //use default for everything else
+   return false;
+});
 
 function connectionNameForAssociation(Model, associationName) {
   return camelcase(`${Model.name}_${associationName}`);
@@ -78,7 +90,7 @@ function mutationName(Model, type) {
 function convertFieldsToGlobalId(Model, fields) {
   // Fix Relay Global ID
   _.each(Object.keys(Model.rawAttributes), (k) => {
-    if (k === "clientMutationId") {
+    if (k === 'clientMutationId') {
       return;
     }
     // Check if reference attribute
@@ -88,6 +100,9 @@ function convertFieldsToGlobalId(Model, fields) {
       let modelName = attr.references.model;
       // let modelType = types[modelName];
       fields[k] = globalIdField(modelName);
+      if (attr.allowNull == null || attr.allowNull == true) {
+        fields[k].type = GraphQLID;
+      }
     } else if (attr.primaryKey) {
       fields[k] = globalIdField(Model.name);
       // Make primaryKey optional (allowNull=True)
@@ -99,7 +114,7 @@ function convertFieldsToGlobalId(Model, fields) {
 function convertFieldsFromGlobalId(Model, data) {
   // Fix Relay Global ID
   _.each(Object.keys(data), (k) => {
-    if (k === "clientMutationId") {
+    if (k === 'clientMutationId') {
       return;
     }
     // Check if reference attribute
@@ -117,6 +132,18 @@ function convertFieldsFromGlobalId(Model, data) {
   });
 }
 
+function isSingleAssociation(atype){
+  return (atype === 'BelongsTo' || atype === 'HasOne');
+}
+
+function addAttributeFieldOptions(Model){
+  return Model.attributeFieldOptions || {}; 
+}
+
+function addDefaultListArgs(Model){
+  return Model.defaultListArgs || {};
+}
+
 function _createRecord({
   mutations,
   Model,
@@ -132,12 +159,11 @@ function _createRecord({
     name: createMutationName,
     description: `Create ${Model.name} record.`,
     inputFields: () => {
-      let fields = attributeFields(Model, {
-        exclude: Model.excludeFields ? Model.excludeFields : [],
+      let fields = attributeFields(Model, _.assign({
         commentToDescription: true,
         // exclude: [Model.primaryKeyAttribute],
         cache
-      });
+      }, addAttributeFieldOptions(Model)));
 
       convertFieldsToGlobalId(Model, fields);
 
@@ -170,7 +196,7 @@ function _createRecord({
           key: field
         } = a;
         // console.log("Edge To", Model.name, "From", from, field, atype);
-        if (atype !== "BelongsTo") {
+        if (!isSingleAssociation(atype)) {
           // HasMany Association
           let {connection} = associationsFromModel[from][`${Model.name}_${field}`];
           let fromType = ModelTypes[from];
@@ -192,13 +218,13 @@ function _createRecord({
           key: field
         } = a;
         // console.log("Edge From", Model.name, "To", to, field, as, atype, foreignKey);
-        if (atype === "BelongsTo") {
+        if (isSingleAssociation(atype)) {
           // BelongsTo association
           let toType = ModelTypes[to];
           output[field] = {
             type: toType,
             resolve: (args,e,context,info) => {
-              return resolver(Models[toType.name], {
+              return resolver(Model[toType.name].target, {
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -207,9 +233,9 @@ function _createRecord({
       // console.log(`${Model.name} mutation output`, output);
       return output;
     },
-    mutateAndGetPayload: (data) => {
+    mutateAndGetPayload: (data, context) => {
       convertFieldsFromGlobalId(Model, data);
-      return Model.create(data);
+      return Model.create(data, {requestUser: context.user});
     }
   });
 
@@ -218,13 +244,15 @@ function _createRecord({
 function _findRecord({
   queries,
   Model,
-  modelType
+  modelType,
+  options
 }) {
   let findByIdQueryName = queryName(Model, 'findById'); //`find${Model.name}ById`;
   queries[findByIdQueryName] = {
     type: modelType,
-    args: defaultArgs(Model),
+    args: defaultArgs(Model, options),
     resolve: resolver(Model, {
+      globalId: options.globalId
     })
   };
 }
@@ -232,13 +260,16 @@ function _findRecord({
 function _findAll({
   queries,
   Model,
-  modelType
+  modelType,
+  options
 }) {
   let findAllQueryName = queryName(Model, 'findAll');
   queries[findAllQueryName] = {
     type: new GraphQLList(modelType),
-    args: defaultListArgs(Model),
-    resolve: resolver(Model)
+    args: _.assign(defaultListArgs(Model), addDefaultListArgs(Model)),
+    resolve: resolver(Model, {
+      globalId: options.globalId
+    })
   };
 }
 
@@ -257,26 +288,25 @@ function _updateRecords({
     name: updateMutationName,
     description: `Update multiple ${Model.name} records.`,
     inputFields: () => {
-      let fields = attributeFields(Model, {
-        exclude: Model.excludeFields ? Model.excludeFields : [],
+      let fields = attributeFields(Model, _.assign({
         commentToDescription: true,
         allowNull: true,
         cache
-      });
+      }, addAttributeFieldOptions(Model)));
 
       convertFieldsToGlobalId(Model, fields);
 
       let updateModelTypeName = `Update${Model.name}ValuesInput`;
       let UpdateModelValuesType = cache[updateModelTypeName] || new GraphQLInputObjectType({
         name: updateModelTypeName,
-        description: "Values to update",
+        description: 'Values to update',
         fields
       });
       cache[updateModelTypeName] = UpdateModelValuesType;
 
       var UpdateModelWhereType = new GraphQLInputObjectType({
         name: `Update${Model.name}WhereInput`,
-        description: "Options to describe the scope of the search.",
+        description: 'Options to describe the scope of the search.',
         fields
       });
 
@@ -312,7 +342,7 @@ function _updateRecords({
           key: field
         } = a;
         // console.log("Edge To", Model.name, "From", from, field, atype);
-        if (atype !== "BelongsTo") {
+        if (!isSingleAssociation(atype)) {
           // HasMany Association
           let {connection} = associationsFromModel[from][`${Model.name}_${field}`];
           let fromType = ModelTypes[from];
@@ -331,13 +361,13 @@ function _updateRecords({
           key: field
         } = a;
         // console.log("Edge From", Model.name, "To", to, field, as, atype, foreignKey);
-        if (atype === "BelongsTo") {
+        if (isSingleAssociation(atype)) {
           // BelongsTo association
           let toType = ModelTypes[to];
           output[field] = {
             type: toType,
             resolve: (args,e,context,info) => {
-              return resolver(Models[toType.name], {
+              return resolver(Model[toType.name].target, {
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -366,13 +396,14 @@ function _updateRecords({
         }
       };
     },
-    mutateAndGetPayload: (data) => {
+    mutateAndGetPayload: (data, context) => {
       // console.log('mutate', data);
       let {values, where} = data;
       convertFieldsFromGlobalId(Model, values);
       convertFieldsFromGlobalId(Model, where);
       return Model.update(values, {
-        where
+        where,
+        requestUser: context.user,
       })
       .then((result) => {
         return {
@@ -401,19 +432,18 @@ function _updateRecord({
     name: updateMutationName,
     description: `Update a single ${Model.name} record.`,
     inputFields: () => {
-      let fields = attributeFields(Model, {
-        exclude: Model.excludeFields ? Model.excludeFields : [],
+      let fields = attributeFields(Model, _.assign({
         commentToDescription: true,
         allowNull: true,
         cache
-      });
+      }, addAttributeFieldOptions(Model)));
 
       convertFieldsToGlobalId(Model, fields);
 
       let updateModelInputTypeName = `Update${Model.name}ValuesInput`;
       let UpdateModelValuesType = cache[updateModelInputTypeName] || new GraphQLInputObjectType({
         name: updateModelInputTypeName,
-        description: "Values to update",
+        description: 'Values to update',
         fields
       });
       cache[updateModelInputTypeName] = UpdateModelValuesType;
@@ -448,7 +478,7 @@ function _updateRecord({
           key: field
         } = a;
         // console.log("Edge To", Model.name, "From", from, field, atype);
-        if (atype !== "BelongsTo") {
+        if (!isSingleAssociation(atype)) {
           // HasMany Association
           let {connection} = associationsFromModel[from][`${Model.name}_${field}`];
           let fromType = ModelTypes[from];
@@ -467,13 +497,13 @@ function _updateRecord({
           key: field
         } = a;
         // console.log("Edge From", Model.name, "To", to, field, as, atype, foreignKey);
-        if (atype === "BelongsTo") {
+        if (isSingleAssociation(atype)) {
           // BelongsTo association
           let toType = ModelTypes[to];
           output[field] = {
             type: toType,
             resolve: (args,e,context,info) => {
-              return resolver(Models[toType.name], {
+              return resolver(Model[toType.name].target, {
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -491,7 +521,7 @@ function _updateRecord({
       return output;
 
     },
-    mutateAndGetPayload: (data) => {
+    mutateAndGetPayload: (data, context) => {
       // console.log('mutate', data);
       let {values} = data;
       let where = {
@@ -500,11 +530,12 @@ function _updateRecord({
       convertFieldsFromGlobalId(Model, values);
       convertFieldsFromGlobalId(Model, where);
 
-      return Model.update(values, {
-        where
-      })
-      .then((result) => {
-        return where;
+      return Model.findOne({ where: where, requestUser: context.user} ).then((instance) => {
+        return instance.update(values, {requestUser: context.user});
+      }).then((result) => {
+        return {...where, ...values};
+      }).catch((error) => {
+        console.log("Error updating an instance of " + Model.name);
       });
 
     }
@@ -528,16 +559,15 @@ function _deleteRecords({
     name: deleteMutationName,
     description: `Delete ${Model.name} records.`,
     inputFields: () => {
-      let fields = attributeFields(Model, {
-        exclude: Model.excludeFields ? Model.excludeFields : [],
+      let fields = attributeFields(Model, _.assign({
         commentToDescription: true,
         allowNull: true,
         cache
-      });
+      }, addAttributeFieldOptions(Model)));
       convertFieldsToGlobalId(Model, fields);
       var DeleteModelWhereType = new GraphQLInputObjectType({
         name: `Delete${Model.name}WhereInput`,
-        description: "Options to describe the scope of the search.",
+        description: 'Options to describe the scope of the search.',
         fields
       });
       return {
@@ -553,11 +583,12 @@ function _deleteRecords({
         }
       };
     },
-    mutateAndGetPayload: (data) => {
+    mutateAndGetPayload: (data, context) => {
       let {where} = data;
       convertFieldsFromGlobalId(Model, where);
       return Model.destroy({
-        where
+        where,
+        requestUser: context.user
       })
       .then((affectedCount) => {
         return {
@@ -592,22 +623,48 @@ function _deleteRecord({
     },
     outputFields: () => {
       let idField = camelcase(`deleted_${Model.name}_id`);
+      let output = {};
+
+      // New Edges
+      _.each(associationsFromModel[Model.name], (a) => {
+        let {
+          to,
+          type: atype,
+          foreignKey,
+          key: field
+        } = a;
+        // console.log("Edge From", Model.name, "To", to, field, as, atype, foreignKey);
+        if (isSingleAssociation(atype)) {
+          // BelongsTo association
+          let toType = ModelTypes[to];
+          output[field] = {
+            type: toType,
+            resolve: (args,e,context,info) => {
+              return resolver(Model[toType.name].target, {
+              })({}, { id: args[foreignKey] }, context, info);
+            }
+          };
+        }
+      });
+
       return {
         [idField]: {
           type: GraphQLID,
           resolve(source) {
             return source[Model.primaryKeyAttribute];
           }
-        }
+        },
+        ...output
       };
     },
-    mutateAndGetPayload: (data) => {
+    mutateAndGetPayload: (data, context) => {
       let where = {
         [Model.primaryKeyAttribute]: data[Model.primaryKeyAttribute]
       };
       convertFieldsFromGlobalId(Model, where);
       return Model.destroy({
-        where
+        where,
+        requestUser: context.user
       })
       .then((affectedCount) => {
         return data;
@@ -617,10 +674,11 @@ function _deleteRecord({
 
 }
 
-function getSchema(sequelize) {
+function getSchema(sequelize, options) {
 
   const {nodeInterface, nodeField, nodeTypeMapper} = sequelizeNodeInterface(sequelize);
 
+  options = options || {};
   const Models = sequelize.models;
   const queries = {};
   const mutations = {};
@@ -640,7 +698,7 @@ function getSchema(sequelize) {
           let atype = association.associationType;
           let target = association.target;
           let targetType = ModelTypes[target.name];
-          if (atype === "BelongsTo") {
+          if (isSingleAssociation(atype)) {
             fields[akey] = {
               type: targetType,
               resolve: resolver(association, {
@@ -652,19 +710,18 @@ function getSchema(sequelize) {
             const connection = ModelTypes[connectionName];
             fields[akey] = {
               type: connection.connectionType,
-              args: connection.connectionArgs,
+              args: target.customConnectionArgs? {...connection.connectionArgs, ...(_.mapValues(target.customConnectionArgs, (arg) => ({type: arg.graphQLType})))} : connection.connectionArgs,
               resolve: connection.resolve
             };
           }
           return fields;
         },
           // Attribute fields
-          attributeFields(Model, {
-            exclude: Model.excludeFields ? Model.excludeFields : [],
+          attributeFields(Model, _.assign({
             globalId: true,
             commentToDescription: true,
             cache
-          })
+          }, addAttributeFieldOptions(Model)))
         );
       },
       interfaces: [nodeInterface]
@@ -686,14 +743,16 @@ function getSchema(sequelize) {
     _findRecord({
       queries,
       Model,
-      modelType
+      modelType,
+      options
     });
 
     // READ all
     _findAll({
       queries,
       Model,
-      modelType
+      modelType,
+      options
     });
 
     // UPDATE single
@@ -753,7 +812,7 @@ function getSchema(sequelize) {
       let as = association.as;
       let targetType = ModelTypes[target.name];
       const connectionName = connectionNameForAssociation(Model, akey);
-      if (atype === "BelongsTo") {
+      if (isSingleAssociation(atype)) {
         // BelongsTo
         _.set(associationsToModel, `${targetType.name}.${akey}`, {
           from: Model.name,
@@ -772,29 +831,29 @@ function getSchema(sequelize) {
       } else {
         // HasMany
         let edgeFields = {};
-        if (atype === "BelongsToMany") {
+        if (atype === 'BelongsToMany') {
           let aModel = association.through.model;
           // console.log('BelongsToMany model', aModel);
-          edgeFields = attributeFields(aModel, {
-            exclude: aModel.excludeFields ? aModel.excludeFields : [],
+          edgeFields = attributeFields(aModel, _.assign({
             globalId: true,
             commentToDescription: true,
             cache
-          });
+          }, addAttributeFieldOptions(aModel)));
           // Pass Through model to resolve function
           _.each(edgeFields, (edgeField, field) => {
             let oldResolve = edgeField.resolve;
             // console.log(field, edgeField, Object.keys(edgeField));
+            // Change below to accomodate dataloader-sequelize used now in graphql-sequelize latest version
             if (typeof oldResolve !== 'function') {
               // console.log(oldResolve);
               let resolve = (source, args, context, info) => {
-                let e = source.node[aModel.name];
+                let e = source.node.get(association.manyFromSource.as)[0];
                 return e[field];
               };
               edgeField.resolve = resolve.bind(edgeField);
             } else {
               let resolve = (source, args, context, info) => {
-                let e = source.node[aModel.name];
+                let e = source.node.get(association.manyFromSource.as)[0];
                 return oldResolve(e, args, context, info);
               };
               edgeField.resolve = resolve.bind(edgeField);
@@ -810,12 +869,29 @@ function getSchema(sequelize) {
             total: {
               type: new GraphQLNonNull(GraphQLInt),
               description: `Total count of ${targetType.name} results associated with ${Model.name}.`,
-              resolve({source}) {
+              resolve: (source, args, context, info) => {
                 let {accessors} = association;
-                return source[accessors.count]();
+                return source.source[accessors.count]({requestUser: context ? context.user : null, where: source.where});
               }
             }
           },
+          where: (key, value) => {
+            if(target.customConnectionArgs) {
+              return target.customConnectionArgs[key].whrClause(value);
+            } else {
+              // TODO: the following should have worked but not working so figure it out...
+              //{[key]: value};
+              let obj = {};
+              obj[key] = value;
+              return obj;
+            }
+          },
+          orderBy: new GraphQLEnumType({
+            name: connectionName + 'ConnectionOrder',
+            values: _.assign({
+              ID: {value: [target.primaryKeyAttribute, 'ASC']},
+            }, target.customOrderEnums || {})
+          }),
           edgeFields
         });
         ModelTypes[connectionName] = connection;
@@ -861,14 +937,14 @@ function getSchema(sequelize) {
   });
 
   const Queries = new GraphQLObjectType({
-    name: "Root",
-    description: "Root of the Schema",
+    name: 'Root',
+    description: 'Root of the Schema',
     fields: () => ({
       root: {
         // Cite: https://github.com/facebook/relay/issues/112#issuecomment-170648934
         type: new GraphQLNonNull(Queries),
-        description: "Self-Pointer from Root to Root",
-        resolve: () => ({})
+        description: 'Self-Pointer from Root to Root',
+        resolve: ({request}) => ({request})
       },
       ...queries,
       node: nodeField
@@ -876,7 +952,7 @@ function getSchema(sequelize) {
   });
 
   const Mutations = new GraphQLObjectType({
-    name: "Mutations",
+    name: 'Mutations',
     fields: {
       ...mutations
     }
