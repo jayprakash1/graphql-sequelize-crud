@@ -19,7 +19,6 @@ const Sequelize = require('sequelize');
 
 const {
   fromGlobalId,
-  globalIdField,
   mutationWithClientMutationId
 } = require('graphql-relay');
 
@@ -96,15 +95,15 @@ function convertFieldsToGlobalId(Model, fields) {
     // Check if reference attribute
     let attr = Model.rawAttributes[k];
     if (attr.references) {
-      // console.log(`Replacing ${Model.name}'s field ${k} with globalIdField.`);
+      // console.log(`Replacing ${Model.name}'s field ${k} with globalIdInputField.`);
       let modelName = attr.references.model;
       // let modelType = types[modelName];
-      fields[k] = globalIdField(modelName);
+      fields[k] = globalIdInputField(modelName);
       if (attr.allowNull == null || attr.allowNull == true) {
         fields[k].type = GraphQLID;
       }
     } else if (attr.primaryKey) {
-      fields[k] = globalIdField(Model.name);
+      fields[k] = globalIdInputField(Model.name);
       // Make primaryKey optional (allowNull=True)
       fields[k].type = GraphQLID;
     }
@@ -142,6 +141,14 @@ function addAttributeFieldOptions(Model){
 
 function addDefaultListArgs(Model){
   return Model.defaultListArgs || {};
+}
+
+function globalIdInputField(modelName) {
+  return {
+    name: 'id',
+    description: `The ID for ${modelName}`,
+    type: new GraphQLNonNull(GraphQLID),
+  };
 }
 
 function _createRecord({
@@ -449,7 +456,7 @@ function _updateRecord({
       cache[updateModelInputTypeName] = UpdateModelValuesType;
 
       return {
-        [Model.primaryKeyAttribute]: globalIdField(Model.name),
+        [Model.primaryKeyAttribute]: globalIdInputField(Model.name),
         values: {
           type: UpdateModelValuesType
         }
@@ -618,7 +625,7 @@ function _deleteRecord({
     description: `Delete single ${Model.name} record.`,
     inputFields: () => {
       return {
-        [Model.primaryKeyAttribute]: globalIdField(Model.name),
+        [Model.primaryKeyAttribute]: globalIdInputField(Model.name),
       };
     },
     outputFields: () => {
