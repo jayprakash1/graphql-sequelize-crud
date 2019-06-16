@@ -854,13 +854,13 @@ function getSchema(sequelize, options) {
             if (typeof oldResolve !== 'function') {
               // console.log(oldResolve);
               let resolve = (source, args, context, info) => {
-                let e = source.node[aModel.name] || (source.node[aModel.options.name.plural] ? source.node[aModel.options.name.plural][0] : null);
+                let e = source.node[aModel.name] || (source.node.dataValues[aModel.options.name.plural] ? source.node.dataValues[aModel.options.name.plural][0] : null);
                 return e[field];
               };
               edgeField.resolve = resolve.bind(edgeField);
             } else {
               let resolve = (source, args, context, info) => {
-                let e = source.node[aModel.name] || (source.node[aModel.options.name.plural] ? source.node[aModel.options.name.plural][0] : null);
+                let e = source.node[aModel.name] || (source.node.dataValues[aModel.options.name.plural] ? source.node.dataValues[aModel.options.name.plural][0] : null);
                 return oldResolve(e, args, context, info);
               };
               edgeField.resolve = resolve.bind(edgeField);
