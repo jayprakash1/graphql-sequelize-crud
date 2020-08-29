@@ -182,6 +182,7 @@ function _createRecord({
         description: `The new ${Model.name}, if successfully created.`,
         resolve: (args,e,context,info) => {
           return resolver(Model, {
+            useMaster: true,
           })({}, {
             [Model.primaryKeyAttribute]: args[Model.primaryKeyAttribute]
           }, context, info);
@@ -225,6 +226,7 @@ function _createRecord({
             type: toType,
             resolve: (args,e,context,info) => {
               return resolver(Model[toType.name].target, {
+                useMaster: true,
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -328,6 +330,7 @@ function _updateRecords({
         description: `The new ${Model.name}, if successfully created.`,
         resolve: (args,e,context,info) => {
           return resolver(Model, {
+            useMaster: true,
           })({}, {
             [Model.primaryKeyAttribute]: args[Model.primaryKeyAttribute]
           }, context, info);
@@ -368,6 +371,7 @@ function _updateRecords({
             type: toType,
             resolve: (args,e,context,info) => {
               return resolver(Model[toType.name].target, {
+                useMaster: true,
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -464,6 +468,7 @@ function _updateRecord({
         description: `The new ${Model.name}, if successfully created.`,
         resolve: (args,e,context,info) => {
           return resolver(Model, {
+            useMaster: true,
           })({}, {
             [Model.primaryKeyAttribute]: args[Model.primaryKeyAttribute]
           }, context, info);
@@ -504,6 +509,7 @@ function _updateRecord({
             type: toType,
             resolve: (args,e,context,info) => {
               return resolver(Model[toType.name].target, {
+                useMaster: true,
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
@@ -641,6 +647,7 @@ function _deleteRecord({
             type: toType,
             resolve: (args,e,context,info) => {
               return resolver(Model[toType.name].target, {
+                useMaster: true,
               })({}, { id: args[foreignKey] }, context, info);
             }
           };
