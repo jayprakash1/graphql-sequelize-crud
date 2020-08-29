@@ -235,7 +235,7 @@ function _createRecord({
     },
     mutateAndGetPayload: (data, context) => {
       convertFieldsFromGlobalId(Model, data);
-      return Model.create(data, {requestUser: context.user});
+      return Model.create(data, {requestUser: context.user, useMaster: true});
     }
   });
 
@@ -404,6 +404,7 @@ function _updateRecords({
       return Model.update(values, {
         where,
         requestUser: context.user,
+        useMaster: true,
       })
       .then((result) => {
         return {
@@ -531,7 +532,7 @@ function _updateRecord({
       convertFieldsFromGlobalId(Model, where);
 
       return Model.findOne({ where: where, requestUser: context.user} ).then((instance) => {
-        return instance.update(values, {requestUser: context.user});
+        return instance.update(values, {requestUser: context.user, useMaster: true});
       }).then((result) => {
         return {...where, ...values};
       }).catch((error) => {
@@ -588,7 +589,8 @@ function _deleteRecords({
       convertFieldsFromGlobalId(Model, where);
       return Model.destroy({
         where,
-        requestUser: context.user
+        requestUser: context.user,
+        useMaster: true,
       })
       .then((affectedCount) => {
         return {
@@ -664,7 +666,8 @@ function _deleteRecord({
       convertFieldsFromGlobalId(Model, where);
       return Model.destroy({
         where,
-        requestUser: context.user
+        requestUser: context.user,
+        useMaster: true,
       })
       .then((affectedCount) => {
         return data;
