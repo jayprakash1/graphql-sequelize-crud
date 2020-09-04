@@ -669,12 +669,18 @@ function _deleteRecord({
         [Model.primaryKeyAttribute]: data[Model.primaryKeyAttribute]
       };
       convertFieldsFromGlobalId(Model, where);
-      return Model.destroy({
-        where,
-        requestUser: context.user
-      })
-      .then((affectedCount) => {
-        return data;
+      let values = {};
+      return Model.findOne({ where: where, requestUser: context.user} ).then((instance) => {
+        values = convertFieldsToGlobalId(Model, instance.dataValues);
+      }).then(() => {
+        return Model.destroy({
+          where,
+          requestUser: context.user
+        });
+      }).then((affectedCount) => {
+        return {...data, ...values};
+      }).catch((err) => {
+        console.log("error while deleting a record: " + err);
       });
     }
   });
