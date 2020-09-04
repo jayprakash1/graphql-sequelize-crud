@@ -671,7 +671,8 @@ function _deleteRecord({
       convertFieldsFromGlobalId(Model, where);
       let values = {};
       return Model.findOne({ where: where, requestUser: context.user} ).then((instance) => {
-        values = convertFieldsToGlobalId(Model, instance.dataValues);
+        values = instance.dataValues;
+        convertFieldsToGlobalId(Model, values);
       }).then(() => {
         return Model.destroy({
           where,
