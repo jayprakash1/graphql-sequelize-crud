@@ -225,13 +225,9 @@ function _createRecord({
           output[field] = {
             type: toType,
             resolve: (args,e,context,info) => {
-              let whr = _.map(args, (key, value) => {
-                return Model[toType.name].target.customConnectionArgs && Model[toType.name].target.customConnectionArgs[key] ? Model[toType.name].target.customConnectionArgs[key].whrClause(value) : null;
-              });
-              target.customConnectionArgs[key].whrClause(value);
               return resolver(Model[toType.name].target, {
                 useMaster: true,
-              })({}, { id: args[foreignKey], where: whr}, context, info);
+              })({}, { id: args[foreignKey] }, context, info);
             }
           };
         }
@@ -720,7 +716,14 @@ function getSchema(sequelize, options) {
               type: targetType,
               args: target.customConnectionArgs ? {...(_.mapValues(target.customConnectionArgs, (arg) => ({type: arg.graphQLType})))} : null,
               resolve: resolver(association, {
-                separate: true
+                separate: true,
+                before: (findOptions, args, context, info) => {
+                  _.map(args, (key, value) => {
+                    if (target.customConnectionArgs[key]) {
+                      _.assign(findOptions, target.customConnectionArgs[key].whrClause(value))
+                    }
+                  });
+                }
               })
             };
           } else {
