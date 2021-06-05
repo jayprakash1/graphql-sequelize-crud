@@ -227,7 +227,7 @@ function _createRecord({
             resolve: (args,e,context,info) => {
               return resolver(Model[toType.name].target, {
                 useMaster: true,
-              })({}, { id: args[foreignKey] }, context, info);
+              })({}, { id: args[foreignKey], ...args}, context, info);
             }
           };
         }
@@ -714,6 +714,7 @@ function getSchema(sequelize, options) {
           if (isSingleAssociation(atype)) {
             fields[akey] = {
               type: targetType,
+              args: target.customConnectionArgs ? {...(_.mapValues(target.customConnectionArgs, (arg) => ({type: arg.graphQLType})))} : null,
               resolve: resolver(association, {
                 separate: true
               })
