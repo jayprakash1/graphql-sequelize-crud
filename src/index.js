@@ -225,9 +225,13 @@ function _createRecord({
           output[field] = {
             type: toType,
             resolve: (args,e,context,info) => {
+              let whr = _.map(args, (key, value) => {
+                return Model[toType.name].target.customConnectionArgs && Model[toType.name].target.customConnectionArgs[key] ? Model[toType.name].target.customConnectionArgs[key].whrClause(value) : null;
+              });
+              target.customConnectionArgs[key].whrClause(value);
               return resolver(Model[toType.name].target, {
                 useMaster: true,
-              })({}, { id: args[foreignKey], ...args}, context, info);
+              })({}, { id: args[foreignKey], where: whr}, context, info);
             }
           };
         }
