@@ -718,7 +718,7 @@ function getSchema(sequelize, options) {
               resolve: resolver(association, {
                 separate: true,
                 before: (findOptions, args, context, info) => {
-                  _.map(args, (key, value) => {
+                  _.forOwn(args, (value, key) => {
                     if (target.customConnectionArgs[key]) {
                       _.assign(findOptions, target.customConnectionArgs[key].whrClause(value))
                     }
