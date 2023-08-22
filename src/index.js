@@ -903,6 +903,7 @@ function getSchema(sequelize, options) {
                 options.where[key] = target.customConnectionArgs[key].whrClause(value, options);
               }
             });
+            return options;
           },
           where: (key, value) => {
             if(target.customConnectionArgs && target.customConnectionArgs[key]) {
