@@ -720,7 +720,12 @@ function getSchema(sequelize, options) {
                 before: (findOptions, args, context, info) => {
                   _.forOwn(args, (value, key) => {
                     if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                      _.assignWith(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other, key) => { return _.isUndefined(value) ? other : { $and: [{ [key]: value}, { [key]: other }] } });
+                      let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
+                      if (findOptions.where[Object.keys(cond)[0]]) {
+                        findOptions.where["$and"] = [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
+                      } else {
+                        _.assignWith(findOptions.where, cond);
+                      }
                     }
                   });
                   return findOptions;
@@ -901,7 +906,12 @@ function getSchema(sequelize, options) {
           before: (findOptions, args, context, info) => {
             _.forOwn(args, (value, key) => {
               if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                _.assignWith(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other, key) => { return _.isUndefined(value) ? other : { $and: [{ [key]: value}, { [key]: other }] } });
+                let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
+                if (findOptions.where[Object.keys(cond)[0]]) {
+                  findOptions.where["$and"] = [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
+                } else {
+                  _.assignWith(findOptions.where, cond);
+                }
               }
             });
             return findOptions;
