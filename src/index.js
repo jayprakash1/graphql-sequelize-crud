@@ -40,7 +40,7 @@ const jsonType = require('graphql-sequelize/lib/types/jsonType.js');
 typeMapper.mapType((type) => {
    //map bools as strings
    if (type instanceof Sequelize.JSON) {
-     return jsonType.default; 
+     return jsonType.default;
    }
    //use default for everything else
    return false;
@@ -137,7 +137,7 @@ function isSingleAssociation(atype){
 }
 
 function addAttributeFieldOptions(Model){
-  return Model.attributeFieldOptions || {}; 
+  return Model.attributeFieldOptions || {};
 }
 
 function addDefaultListArgs(Model){
@@ -719,8 +719,8 @@ function getSchema(sequelize, options) {
                 separate: true,
                 before: (findOptions, args, context, info) => {
                   _.forOwn(args, (value, key) => {
-                    if (target.customConnectionArgs[key]) {
-                      _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value))
+                    if (target.customConnectionArgs && target.customConnectionArgs[key]) {
+                      _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, options))
                     }
                   });
                   return findOptions;
@@ -897,8 +897,16 @@ function getSchema(sequelize, options) {
               }
             }
           },
+          before: (options, args, context, info) => {
+            _.each(options.where, (value, key) => {
+              if(target.customConnectionArgs && target.customConnectionArgs[key]) {
+                options.where[key] = target.customConnectionArgs[key].whrClause(value, options);
+              }
+            });
+          },
           where: (key, value) => {
-            if(target.customConnectionArgs) {
+            if(target.customConnectionArgs && target.customConnectionArgs[key]) {
+              // TODO: not required as before hook will overwrite
               return target.customConnectionArgs[key].whrClause(value);
             } else {
               // TODO: the following should have worked but not working so figure it out...
