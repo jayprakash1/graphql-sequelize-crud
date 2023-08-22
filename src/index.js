@@ -720,7 +720,7 @@ function getSchema(sequelize, options) {
                 before: (findOptions, args, context, info) => {
                   _.forOwn(args, (value, key) => {
                     if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                      _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other) => { return _.isUndefined(value) ? other : [value, other] });
+                      _.assignWith(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other) => { return _.isUndefined(value) ? other : [value, other] });
                     }
                   });
                   return findOptions;
@@ -901,7 +901,7 @@ function getSchema(sequelize, options) {
           before: (findOptions, args, context, info) => {
             _.forOwn(args, (value, key) => {
               if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other) => { return _.isUndefined(value) ? other : [value, other] })
+                _.assignWith(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions), (value, other) => { return _.isUndefined(value) ? other : [value, other] })
               }
             });
             return findOptions;
