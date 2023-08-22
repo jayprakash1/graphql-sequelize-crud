@@ -720,7 +720,7 @@ function getSchema(sequelize, options) {
                 before: (findOptions, args, context, info) => {
                   _.forOwn(args, (value, key) => {
                     if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                      _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, options))
+                      _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions))
                     }
                   });
                   return findOptions;
@@ -897,13 +897,14 @@ function getSchema(sequelize, options) {
               }
             }
           },
-          before: (options, args, context, info) => {
-            _.each(options.where, (value, key) => {
-              if(target.customConnectionArgs && target.customConnectionArgs[key]) {
-                options.where[key] = target.customConnectionArgs[key].whrClause(value, options);
+          // TODO: remove code duplication as it is same in single object association
+          before: (findOptions, args, context, info) => {
+            _.forOwn(args, (value, key) => {
+              if (target.customConnectionArgs && target.customConnectionArgs[key]) {
+                _.assign(findOptions.where, target.customConnectionArgs[key].whrClause(value, findOptions))
               }
             });
-            return options;
+            return findOptions;
           },
           where: (key, value) => {
             if(target.customConnectionArgs && target.customConnectionArgs[key]) {
