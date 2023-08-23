@@ -721,7 +721,8 @@ function getSchema(sequelize, options) {
                   _.forOwn(args, (value, key) => {
                     if (target.customConnectionArgs && target.customConnectionArgs[key]) {
                       let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
-                      if (findOptions.where[Object.keys(cond)[0]]) {
+                      // TODO: handle custom arguments which may be handled before to be overwritten
+                      if (findOptions.where[Object.keys(cond)[0]] && findOptions.where[Object.keys(cond)[0]] != value) {
                         findOptions.where["$and"] = findOptions.where["$and"] ? [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
                       } else {
                         _.assignWith(findOptions.where, cond);
@@ -907,7 +908,8 @@ function getSchema(sequelize, options) {
             _.forOwn(args, (value, key) => {
               if (target.customConnectionArgs && target.customConnectionArgs[key]) {
                 let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
-                if (findOptions.where[Object.keys(cond)[0]]) {
+                // TODO: handle custom arguments which may be handled before to be overwritten
+                if (findOptions.where[Object.keys(cond)[0]] && findOptions.where[Object.keys(cond)[0]] != value) {
                   findOptions.where["$and"] = findOptions.where["$and"] ? [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
                 } else {
                   _.assignWith(findOptions.where, cond);
