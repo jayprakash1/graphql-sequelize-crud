@@ -699,12 +699,14 @@ function getSchema(sequelize, options) {
   const associationsFromModel = {};
   const cache = {};
 
-  const connArgWhr = (model, args, options) => {
+  const connArgWhr = (model, args, options, requestUser = null) => {
     if (args == null)
      return options;
+    if (requestUser == null && options.requestUser != null)
+      requestUser = options.requestUser
     _.forOwn(args, (value, key) => {
       if (model.customConnectionArgs && model.customConnectionArgs[key]) {
-        let cond = model.customConnectionArgs[key].whrClause(value, options);
+        let cond = model.customConnectionArgs[key].whrClause(value, requestUser);
         // TODO: handle custom arguments which may be handled before to be overwritten
         if (options.where[Object.keys(cond)[0]] && options.where[Object.keys(cond)[0]] != value) {
           options.where["$and"] = options.where["$and"] ? [...options.where["$and"], {[Object.keys(cond)[0]]: options.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: options.where[Object.keys(cond)[0]]}, cond]
@@ -905,7 +907,7 @@ function getSchema(sequelize, options) {
               description: `Total count of ${targetType.name} results associated with ${Model.name}.`,
               resolve: (source, args, context, info) => {
                 let {accessors} = association;
-                return source.source[accessors.count]({requestUser: context ? context.user : null, where: connArgWhr(target, source.args, source).where});
+                return source.source[accessors.count]({requestUser: context ? context.user : null, where: connArgWhr(target, source.args, source, (context ? context.user : null)).where});
               }
             }
           },
