@@ -701,7 +701,7 @@ function getSchema(sequelize, options) {
 
   const connArgWhr = (model, args, options) => {
     if (args == null)
-      return options;
+     return options;
     _.forOwn(args, (value, key) => {
       if (model.customConnectionArgs && model.customConnectionArgs[key]) {
         let cond = model.customConnectionArgs[key].whrClause(value, options);
@@ -905,7 +905,7 @@ function getSchema(sequelize, options) {
               description: `Total count of ${targetType.name} results associated with ${Model.name}.`,
               resolve: (source, args, context, info) => {
                 let {accessors} = association;
-                return source.source[accessors.count]({requestUser: context ? context.user : null, where: connArgWhr(target, source.args, source.where)});
+                return source.source[accessors.count]({requestUser: context ? context.user : null, where: connArgWhr(target, source.args, source)});
               }
             }
           },
