@@ -699,6 +699,21 @@ function getSchema(sequelize, options) {
   const associationsFromModel = {};
   const cache = {};
 
+  const connArgWhr = (model, args, options) => {
+    _.forOwn(args, (value, key) => {
+      if (model.customConnectionArgs && model.customConnectionArgs[key]) {
+        let cond = model.customConnectionArgs[key].whrClause(value, options);
+        // TODO: handle custom arguments which may be handled before to be overwritten
+        if (options.where[Object.keys(cond)[0]] && options.where[Object.keys(cond)[0]] != value) {
+          options.where["$and"] = options.where["$and"] ? [...options.where["$and"], {[Object.keys(cond)[0]]: options.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: options.where[Object.keys(cond)[0]]}, cond]
+        } else {
+          _.assignWith(options.where, cond);
+        }
+      }
+    });
+    return options;
+  }
+
   // Create types map
   const ModelTypes = Object.keys(Models).reduce(function (types, key) {
     const Model = Models[key];
@@ -718,18 +733,7 @@ function getSchema(sequelize, options) {
               resolve: resolver(association, {
                 separate: true,
                 before: (findOptions, args, context, info) => {
-                  _.forOwn(args, (value, key) => {
-                    if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                      let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
-                      // TODO: handle custom arguments which may be handled before to be overwritten
-                      if (findOptions.where[Object.keys(cond)[0]] && findOptions.where[Object.keys(cond)[0]] != value) {
-                        findOptions.where["$and"] = findOptions.where["$and"] ? [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
-                      } else {
-                        _.assignWith(findOptions.where, cond);
-                      }
-                    }
-                  });
-                  return findOptions;
+                  return connArgWhr(target, args, findOptions);
                 }
               })
             };
@@ -899,24 +903,13 @@ function getSchema(sequelize, options) {
               description: `Total count of ${targetType.name} results associated with ${Model.name}.`,
               resolve: (source, args, context, info) => {
                 let {accessors} = association;
+                connArgWhr(source, args, source.where);
                 return source.source[accessors.count]({requestUser: context ? context.user : null, where: source.where});
               }
             }
           },
-          // TODO: remove code duplication as it is same in single object association
           before: (findOptions, args, context, info) => {
-            _.forOwn(args, (value, key) => {
-              if (target.customConnectionArgs && target.customConnectionArgs[key]) {
-                let cond = target.customConnectionArgs[key].whrClause(value, findOptions);
-                // TODO: handle custom arguments which may be handled before to be overwritten
-                if (findOptions.where[Object.keys(cond)[0]] && findOptions.where[Object.keys(cond)[0]] != value) {
-                  findOptions.where["$and"] = findOptions.where["$and"] ? [...findOptions.where["$and"], {[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond] : [{[Object.keys(cond)[0]]: findOptions.where[Object.keys(cond)[0]]}, cond]
-                } else {
-                  _.assignWith(findOptions.where, cond);
-                }
-              }
-            });
-            return findOptions;
+            return connArgWhr(target, args, findOptions);
           },
           where: (key, value) => {
             if(target.customConnectionArgs && target.customConnectionArgs[key]) {
