@@ -903,7 +903,7 @@ function getSchema(sequelize, options) {
               description: `Total count of ${targetType.name} results associated with ${Model.name}.`,
               resolve: (source, args, context, info) => {
                 let {accessors} = association;
-                connArgWhr(source, args, source.where);
+                connArgWhr(target, args, source.where);
                 return source.source[accessors.count]({requestUser: context ? context.user : null, where: source.where});
               }
             }
