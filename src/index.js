@@ -915,16 +915,9 @@ function getSchema(sequelize, options) {
             return connArgWhr(target, args, findOptions);
           },
           where: (key, value) => {
-            if(target.customConnectionArgs && target.customConnectionArgs[key]) {
-              // TODO: not required as before hook will overwrite
-              return target.customConnectionArgs[key].whrClause(value);
-            } else {
-              // TODO: the following should have worked but not working so figure it out...
-              //{[key]: value};
-              let obj = {};
-              obj[key] = value;
-              return obj;
-            }
+            // customConnectionArgs are handled by the before hook via connArgWhr()
+            // This where function only handles regular (non-custom) connection arguments
+            return {[key]: value};
           },
           orderBy: new GraphQLEnumType({
             name: connectionName + 'ConnectionOrder',
